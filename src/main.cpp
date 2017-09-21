@@ -189,6 +189,7 @@ int main() {
         map_waypoints_dy.push_back(d_y);
     }
 
+    double reference_velocity = 49.5;
     h.onMessage([&map_waypoints_x, &map_waypoints_y, &map_waypoints_s, &map_waypoints_dx, &map_waypoints_dy](
             uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
             uWS::OpCode opCode) {
@@ -199,10 +200,10 @@ int main() {
         //cout << sdata << endl;
         if (length && length > 2 && data[0] == '4' && data[1] == '2') {
 
-            auto s = hasData(data);
+            auto basicString = hasData(data);
 
-            if (s != "") {
-                auto j = json::parse(s);
+            if (basicString != "") {
+                auto j = json::parse(basicString);
 
                 string event = j[0].get<string>();
 
@@ -226,25 +227,90 @@ int main() {
 
                     // Sensor Fusion Data, a list of all other cars on the same side of the road.
                     auto sensor_fusion = j[1]["sensor_fusion"];
-
-                    json msgJson;
+                    int previous_size = previous_path_x.size();
+                    vector<double> ptsx;
+                    vector<double> ptsy;
+                    double reference_x = car_x;
+                    double reference_y = car_y;
+                    double reference_yaw = deg2rad(car_yaw);
+                    if (previous_size < 2) {
+                        double previous_car_x = car_x - cos(car_yaw);
+                        double previous_car_y = car_y - sin(car_yaw);
+                        ptsx.push_back(previous_car_x);
+                        ptsx.push_back(car_x);
+                        ptsy.push_back(previous_car_y);
+                        ptsy.push_back(car_y);
+                    } else {
+                        reference_x = previous_path_x[previous_size - 1];
+                        reference_y = previous_path_y[previous_size - 1];
+                        double reference_previous_x = previous_path_x[previous_size - 2];
+                        double reference_previous_y = previous_path_y[previous_size - 2];
+                        reference_yaw = atan2(reference_y - reference_previous_y, reference_x - reference_previous_x);
+                        ptsx.push_back(reference_previous_x);
+                        ptsx.push_back(reference_x);
+                        ptsy.push_back(reference_previous_y);
+                        ptsy.push_back(reference_y);
+                    }
+                    int lane = 1;//middle lane
+                    int d = 2 + 4 * lane;
+                    double s = car_s + 30;
+                    double s1 = car_s + 60;
+                    double s2 = car_s + 90;
+                    const vector<double> &next_wp0 = getXY(s, d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+                    const vector<double> &next_wp1 = getXY(s1, d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+                    const vector<double> &next_wp2 = getXY(s2, d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+                    ptsx.push_back(next_wp0[0]);
+                    ptsx.push_back(next_wp1[0]);
+                    ptsx.push_back(next_wp2[0]);
+                    ptsy.push_back(next_wp0[1]);
+                    ptsy.push_back(next_wp1[1]);
+                    ptsy.push_back(next_wp2[1]);
+                    for (int i = 0; i < ptsx.size(); i++) {
+                        double shift_x = ptsx[i] - reference_x;
+                        double shift_y = ptsy[i] - reference_y;
+                        ptsx[i] = shift_x * cos(-reference_yaw) - shift_y * sin(-reference_yaw);
+                        ptsy[i] = shift_x * sin(-reference_yaw) + shift_y * cos(-reference_yaw);
+                    }
+                    tK::spline spline;
+                    spline.set_points(ptsx, ptsy);
 
                     vector<double> next_x_vals;
                     vector<double> next_y_vals;
-
-
+                    for (int i = 0; i < previous_path_x.size(); i++) {
+                        next_x_vals.push_back(previous_path_x[i]);
+                        next_y_vals.push_back(previous_path_y[i]);
+                    }
+                    double target_x = 30.0;
+                    double target_y = spline(target_x);
+                    double target_distance = sqrt(target_x * target_x + target_y * target_y);
+                    double x_add_on = 0;
+                    for (int i = 1; i < 50 - previous_path_x.size(); i++) {
+                        double n = target_distance / (0.02 * reference_velocity / 2.24);
+                        double x_point = x_add_on + target_x / n;
+                        double y_point = spline(x_point);
+                        x_add_on = x_point;
+                        double x_reference = x_point;
+                        double y_reference = y_point;
+                        x_point = x_reference * cos(reference_yaw) - y_reference * sin(reference_yaw);
+                        y_point = x_reference * sin(reference_yaw) + y_reference * cos(reference_yaw);
+                        x_point += reference_x;
+                        y_point += reference_y;
+                        next_x_vals.push_back(x_point);
+                        next_y_vals.push_back(y_point);
+                    }
                     // define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
-                    double distance_increment = 0.3;
-                    for (int i = 0; i < 50; i++) {
-                        double next_s = car_s + (i + 1) * distance_increment;
-                        int next_d = 6;
-                        const vector<double> &xy = getXY(next_s, next_d, map_waypoints_s, map_waypoints_x,
-                                                         map_waypoints_y);
-                        next_x_vals.push_back(xy[0]);
-                        next_y_vals.push_back(xy[1]);
+//                    double distance_increment = 0.3;
+//                    for (int i = 0; i < 50; i++) {
+//                        double next_s = car_s + (i + 1) * distance_increment;
+//                        int next_d = 6;
+//                        const vector<double> &xy = getXY(next_s, next_d, map_waypoints_s, map_waypoints_x,
+//                                                         map_waypoints_y);
+//                        next_x_vals.push_back(xy[0]);
+//                        next_y_vals.push_back(xy[1]);
 //                        next_x_vals.push_back(car_x + (distance_increment * i) * cos(deg2rad(car_yaw)));
 //                        next_y_vals.push_back(car_y + (distance_increment * i) * sin(deg2rad(car_yaw)));
-                    }
+//                    }
+                    json msgJson;
                     msgJson["next_x"] = next_x_vals;
                     msgJson["next_y"] = next_y_vals;
 
@@ -262,16 +328,11 @@ int main() {
         }
     });
 
-    // We don't need this since we're not using HTTP but if it's removed the
-    // program
-    // doesn't compile :-(
-    h.onHttpRequest([](uWS::HttpResponse *res, uWS::HttpRequest req, char *data,
-                       size_t, size_t) {
+    h.onHttpRequest([](uWS::HttpResponse *res, uWS::HttpRequest req, char *data, size_t, size_t) {
         const std::string s = "<h1>Hello world!</h1>";
         if (req.getUrl().valueLength == 1) {
             res->end(s.data(), s.length());
         } else {
-            // i guess this should be done more gracefully?
             res->end(nullptr, 0);
         }
     });
@@ -280,8 +341,7 @@ int main() {
         std::cout << "Connected!!!" << std::endl;
     });
 
-    h.onDisconnection([&h](uWS::WebSocket<uWS::SERVER> ws, int code,
-                           char *message, size_t length) {
+    h.onDisconnection([&h](uWS::WebSocket<uWS::SERVER> ws, int code, char *message, size_t length) {
         ws.close();
         std::cout << "Disconnected" << std::endl;
     });
