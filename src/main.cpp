@@ -271,7 +271,7 @@ int main() {
                         ptsx[i] = shift_x * cos(-reference_yaw) - shift_y * sin(-reference_yaw);
                         ptsy[i] = shift_x * sin(-reference_yaw) + shift_y * cos(-reference_yaw);
                     }
-                    tK::spline spline;
+                    tk::spline spline;
                     spline.set_points(ptsx, ptsy);
 
                     vector<double> next_x_vals;
@@ -307,7 +307,7 @@ int main() {
 //                                                         map_waypoints_y);
 //                        next_x_vals.push_back(xy[0]);
 //                        next_y_vals.push_back(xy[1]);
-//                        next_x_vals.push_back(car_x + (distance_increment * i) * cos(deg2rad(car_yaw)));
+//                        next_x_vals.push_back(car_x + (distance_increment * i) * cos(deg2rad(car_yaw)));~
 //                        next_y_vals.push_back(car_y + (distance_increment * i) * sin(deg2rad(car_yaw)));
 //                    }
                     json msgJson;
