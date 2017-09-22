@@ -189,7 +189,6 @@ int main() {
         map_waypoints_dy.push_back(d_y);
     }
 
-    double reference_velocity = 49.5;
     h.onMessage([&map_waypoints_x, &map_waypoints_y, &map_waypoints_s, &map_waypoints_dx, &map_waypoints_dy](
             uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
             uWS::OpCode opCode) {
@@ -228,6 +227,25 @@ int main() {
                     // Sensor Fusion Data, a list of all other cars on the same side of the road.
                     auto sensor_fusion = j[1]["sensor_fusion"];
                     int previous_size = previous_path_x.size();
+                    if (previous_size > 0) {
+                        car_s = end_path_s;
+                    }
+                    bool too_close = false;
+                    int lane = 1; //middle lane
+                    double reference_velocity = 49.5;
+                    for (int i = 0; i < sensor_fusion.size(); i++) {
+                        float d = sensor_fusion[i][6];
+                        if (d < 2 + 4 * lane + 2 && d > 2 + 4 * lane - 2) {
+                            double vx = sensor_fusion[i][3];
+                            double vy = sensor_fusion[i][4];
+                            double check_speed = sqrt(vx * vx + vy * vy);
+                            double check_car_s = sensor_fusion[i][5];
+                            check_car_s += previous_size * 0.02 * check_speed;
+                            if (check_car_s > car_s && check_car_s - car_s < 30) {
+                                reference_velocity = 29.5;
+                            }
+                        }
+                    }
                     vector<double> ptsx;
                     vector<double> ptsy;
                     double reference_x = car_x;
@@ -251,7 +269,6 @@ int main() {
                         ptsy.push_back(reference_previous_y);
                         ptsy.push_back(reference_y);
                     }
-                    int lane = 1;//middle lane
                     int d = 2 + 4 * lane;
                     double s = car_s + 30;
                     double s1 = car_s + 60;
