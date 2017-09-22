@@ -188,8 +188,10 @@ int main() {
         map_waypoints_dx.push_back(d_x);
         map_waypoints_dy.push_back(d_y);
     }
-
-    h.onMessage([&map_waypoints_x, &map_waypoints_y, &map_waypoints_s, &map_waypoints_dx, &map_waypoints_dy](
+    int lane = 1; //middle lane
+    double reference_velocity = 3.1337;
+    h.onMessage([&map_waypoints_x, &map_waypoints_y, &map_waypoints_s, &map_waypoints_dx, &map_waypoints_dy,
+                        &lane, &reference_velocity](
             uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
             uWS::OpCode opCode) {
         // "42" at the start of the message means there's a websocket message event.
@@ -231,8 +233,6 @@ int main() {
                         car_s = end_path_s;
                     }
                     bool too_close = false;
-                    int lane = 1; //middle lane
-                    double reference_velocity = 49.5;
                     for (int i = 0; i < sensor_fusion.size(); i++) {
                         float d = sensor_fusion[i][6];
                         if (d < 2 + 4 * lane + 2 && d > 2 + 4 * lane - 2) {
@@ -242,9 +242,17 @@ int main() {
                             double check_car_s = sensor_fusion[i][5];
                             check_car_s += previous_size * 0.02 * check_speed;
                             if (check_car_s > car_s && check_car_s - car_s < 30) {
-                                reference_velocity = 29.5;
+                                too_close = true;
+                                if (lane > 0) {
+                                    lane = 0;
+                                }
                             }
                         }
+                    }
+                    if (too_close) {
+                        reference_velocity -= 0.224;
+                    } else if (reference_velocity < 49.5) {
+                        reference_velocity += 0.224;
                     }
                     vector<double> ptsx;
                     vector<double> ptsy;
@@ -263,7 +271,8 @@ int main() {
                         reference_y = previous_path_y[previous_size - 1];
                         double reference_previous_x = previous_path_x[previous_size - 2];
                         double reference_previous_y = previous_path_y[previous_size - 2];
-                        reference_yaw = atan2(reference_y - reference_previous_y, reference_x - reference_previous_x);
+                        reference_yaw = atan2(reference_y - reference_previous_y,
+                                              reference_x - reference_previous_x);
                         ptsx.push_back(reference_previous_x);
                         ptsx.push_back(reference_x);
                         ptsy.push_back(reference_previous_y);
