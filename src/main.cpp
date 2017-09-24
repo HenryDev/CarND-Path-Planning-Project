@@ -1,18 +1,13 @@
 #include <fstream>
-#include <math.h>
+#include <cmath>
 #include <uWS/uWS.h>
-#include <chrono>
-#include <iostream>
 #include <thread>
-#include <vector>
 #include "Eigen-3.3/Eigen/Core"
-#include "Eigen-3.3/Eigen/QR"
 #include "json.hpp"
 #include "spline.h"
 
 using namespace std;
 
-// for convenience
 using json = nlohmann::json;
 
 // For converting back and forth between radians and degrees.
@@ -20,15 +15,13 @@ constexpr double pi() { return M_PI; }
 
 double deg2rad(double x) { return x * pi() / 180; }
 
-double rad2deg(double x) { return x * 180 / pi(); }
-
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
 // else the empty string "" will be returned.
-string hasData(string s) {
+string hasData(const string &s) {
     auto found_null = s.find("null");
-    auto b1 = s.find_first_of("[");
-    auto b2 = s.find_first_of("}");
+    auto b1 = s.find_first_of('[');
+    auto b2 = s.find_first_of('}');
     if (found_null != string::npos) {
         return "";
     } else if (b1 != string::npos && b2 != string::npos) {
@@ -42,10 +35,8 @@ double distance(double x1, double y1, double x2, double y2) {
 }
 
 int ClosestWaypoint(double x, double y, const vector<double> &maps_x, const vector<double> &maps_y) {
-
     double closestLen = 100000; //large number
     int closestWaypoint = 0;
-
     for (int i = 0; i < maps_x.size(); i++) {
         double map_x = maps_x[i];
         double map_y = maps_y[i];
@@ -54,30 +45,20 @@ int ClosestWaypoint(double x, double y, const vector<double> &maps_x, const vect
             closestLen = dist;
             closestWaypoint = i;
         }
-
     }
-
     return closestWaypoint;
-
 }
 
 int NextWaypoint(double x, double y, double theta, const vector<double> &maps_x, const vector<double> &maps_y) {
-
     int closestWaypoint = ClosestWaypoint(x, y, maps_x, maps_y);
-
     double map_x = maps_x[closestWaypoint];
     double map_y = maps_y[closestWaypoint];
-
     double heading = atan2((map_y - y), (map_x - x));
-
     double angle = abs(theta - heading);
-
     if (angle > pi() / 4) {
         closestWaypoint++;
     }
-
     return closestWaypoint;
-
 }
 
 // Transform from Cartesian x,y coordinates to Frenet s,d coordinates
@@ -87,7 +68,7 @@ vector<double> getFrenet(double x, double y, double theta, const vector<double> 
     int prev_wp;
     prev_wp = next_wp - 1;
     if (next_wp == 0) {
-        prev_wp = maps_x.size() - 1;
+        prev_wp = static_cast<int>(maps_x.size() - 1);
     }
 
     double n_x = maps_x[next_wp] - maps_x[prev_wp];
@@ -134,7 +115,7 @@ getXY(double s, double d, const vector<double> &maps_s, const vector<double> &ma
         prev_wp++;
     }
 
-    int wp2 = (prev_wp + 1) % maps_x.size();
+    auto wp2 = static_cast<int>((prev_wp + 1) % maps_x.size());
 
     double heading = atan2((maps_y[wp2] - maps_y[prev_wp]), (maps_x[wp2] - maps_x[prev_wp]));
     // the x,y,s along the segment
@@ -174,9 +155,9 @@ int main() {
         istringstream iss(line);
         double x;
         double y;
-        float s;
-        float d_x;
-        float d_y;
+        double s;
+        double d_x;
+        double d_y;
         iss >> x;
         iss >> y;
         iss >> s;
@@ -199,11 +180,11 @@ int main() {
         // The 2 signifies a websocket event
         //auto sdata = string(data).substr(0, length);
         //cout << sdata << endl;
-        if (length && length > 2 && data[0] == '4' && data[1] == '2') {
+        if (length > 2 && data[0] == '4' && data[1] == '2') {
 
             auto basicString = hasData(data);
 
-            if (basicString != "") {
+            if (!basicString.empty()) {
                 auto j = json::parse(basicString);
 
                 string event = j[0].get<string>();
@@ -243,8 +224,10 @@ int main() {
                             check_car_s += previous_size * 0.02 * check_speed;
                             if (check_car_s > car_s && check_car_s - car_s < 30) {
                                 too_close = true;
-                                if (lane > 0) {
+                                if (lane == 1) {
                                     lane = 0;
+                                } else {
+                                    lane = 1;
                                 }
                             }
                         }
@@ -324,18 +307,6 @@ int main() {
                         next_x_vals.push_back(x_point);
                         next_y_vals.push_back(y_point);
                     }
-                    // define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
-//                    double distance_increment = 0.3;
-//                    for (int i = 0; i < 50; i++) {
-//                        double next_s = car_s + (i + 1) * distance_increment;
-//                        int next_d = 6;
-//                        const vector<double> &xy = getXY(next_s, next_d, map_waypoints_s, map_waypoints_x,
-//                                                         map_waypoints_y);
-//                        next_x_vals.push_back(xy[0]);
-//                        next_y_vals.push_back(xy[1]);
-//                        next_x_vals.push_back(car_x + (distance_increment * i) * cos(deg2rad(car_yaw)));~
-//                        next_y_vals.push_back(car_y + (distance_increment * i) * sin(deg2rad(car_yaw)));
-//                    }
                     json msgJson;
                     msgJson["next_x"] = next_x_vals;
                     msgJson["next_y"] = next_y_vals;
