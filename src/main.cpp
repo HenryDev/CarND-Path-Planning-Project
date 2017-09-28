@@ -169,8 +169,8 @@ int main() {
         map_waypoints_dx.push_back(d_x);
         map_waypoints_dy.push_back(d_y);
     }
-    int lane = 1; //middle lane
-    double reference_velocity = 3.1337;
+    int lane = 1; //start in lane 1 the middle lane
+    double reference_velocity = 3.1337; //starting speed in mph
     h.onMessage([&map_waypoints_x, &map_waypoints_y, &map_waypoints_s, &map_waypoints_dx, &map_waypoints_dy,
                         &lane, &reference_velocity](
             uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
@@ -209,6 +209,7 @@ int main() {
 
                     // Sensor Fusion Data, a list of all other cars on the same side of the road.
                     auto sensor_fusion = j[1]["sensor_fusion"];
+                    //previous list of points
                     int previous_size = previous_path_x.size();
                     if (previous_size > 0) {
                         car_s = end_path_s;
@@ -237,19 +238,27 @@ int main() {
                     } else if (reference_velocity < 49.5) {
                         reference_velocity += 0.224;
                     }
+
+                    // waypoints
                     vector<double> ptsx;
                     vector<double> ptsy;
+
+                    //where the car is or where the previous path ends
                     double reference_x = car_x;
                     double reference_y = car_y;
                     double reference_yaw = deg2rad(car_yaw);
+                    //if the previous path is almost empty, then use the car state as a starting reference
                     if (previous_size < 2) {
+                        //use 2 points that are tangent to where the car is pointing
                         double previous_car_x = car_x - cos(car_yaw);
                         double previous_car_y = car_y - sin(car_yaw);
+                        //generate 2 points based on the car's angle
                         ptsx.push_back(previous_car_x);
                         ptsx.push_back(car_x);
                         ptsy.push_back(previous_car_y);
                         ptsy.push_back(car_y);
                     } else {
+                        //use the last 2 points in the previous path to calculate where the car is heading
                         reference_x = previous_path_x[previous_size - 1];
                         reference_y = previous_path_y[previous_size - 1];
                         double reference_previous_x = previous_path_x[previous_size - 2];
@@ -260,10 +269,12 @@ int main() {
                         ptsy.push_back(reference_previous_y);
                         ptsy.push_back(reference_y);
                     }
+
                     int d = 2 + 4 * lane;
                     double s = car_s + 30;
                     double s1 = car_s + 60;
                     double s2 = car_s + 90;
+                    //make 3 points 30m apart for the location of the car
                     const vector<double> &next_wp0 = getXY(s, d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
                     const vector<double> &next_wp1 = getXY(s1, d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
                     const vector<double> &next_wp2 = getXY(s2, d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
@@ -273,17 +284,22 @@ int main() {
                     ptsy.push_back(next_wp0[1]);
                     ptsy.push_back(next_wp1[1]);
                     ptsy.push_back(next_wp2[1]);
+
+                    //shift the perspective so that the points' heading is the same as the car's heading
                     for (int i = 0; i < ptsx.size(); i++) {
                         double shift_x = ptsx[i] - reference_x;
                         double shift_y = ptsy[i] - reference_y;
                         ptsx[i] = shift_x * cos(-reference_yaw) - shift_y * sin(-reference_yaw);
                         ptsy[i] = shift_x * sin(-reference_yaw) + shift_y * cos(-reference_yaw);
                     }
+
                     tk::spline spline;
                     spline.set_points(ptsx, ptsy);
 
+                    //the actual x and y points for use in the planner
                     vector<double> next_x_vals;
                     vector<double> next_y_vals;
+                    //if there's any points leftover from the previous path, add them to the path planner
                     for (int i = 0; i < previous_path_x.size(); i++) {
                         next_x_vals.push_back(previous_path_x[i]);
                         next_y_vals.push_back(previous_path_y[i]);
@@ -314,7 +330,6 @@ int main() {
 
                     //this_thread::sleep_for(chrono::milliseconds(1000));
                     ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
-
                 }
             } else {
                 // Manual driving
