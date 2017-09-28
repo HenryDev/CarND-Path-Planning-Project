@@ -208,22 +208,28 @@ int main() {
                     double end_path_d = j[1]["end_path_d"];
 
                     // Sensor Fusion Data, a list of all other cars on the same side of the road.
-                    auto sensor_fusion = j[1]["sensor_fusion"];
+                    vector<vector<double>> sensor_fusion = j[1]["sensor_fusion"];
                     //previous list of points
                     int previous_size = previous_path_x.size();
+
                     if (previous_size > 0) {
                         car_s = end_path_s;
                     }
                     bool too_close = false;
                     for (int i = 0; i < sensor_fusion.size(); i++) {
-                        float d = sensor_fusion[i][6];
+                        //car's d position in frenet coordinates
+                        double d = sensor_fusion[i][6];
+                        //if the car is in my lane
                         if (d < 2 + 4 * lane + 2 && d > 2 + 4 * lane - 2) {
                             double vx = sensor_fusion[i][3];
                             double vy = sensor_fusion[i][4];
-                            double check_speed = sqrt(vx * vx + vy * vy);
-                            double check_car_s = sensor_fusion[i][5];
-                            check_car_s += previous_size * 0.02 * check_speed;
-                            if (check_car_s > car_s && check_car_s - car_s < 30) {
+                            double their_speed = sqrt(vx * vx + vy * vy);
+                            //the s value of that car
+                            double their_s = sensor_fusion[i][5];
+                            //if using previous path points, project the s values outward in time
+                            their_s += previous_size * 0.02 * their_speed;
+                            //if they're in front of us and the gap is less than 30m
+                            if (their_s > car_s && their_s - car_s < 30) {
                                 too_close = true;
                                 if (lane == 1) {
                                     lane = 0;
@@ -294,6 +300,7 @@ int main() {
                     }
 
                     tk::spline spline;
+                    //add the 5 anchor points to spline
                     spline.set_points(ptsx, ptsy);
 
                     //the actual x and y points for use in the planner
@@ -304,17 +311,22 @@ int main() {
                         next_x_vals.push_back(previous_path_x[i]);
                         next_y_vals.push_back(previous_path_y[i]);
                     }
+                    //horizon is 30m
                     double target_x = 30.0;
                     double target_y = spline(target_x);
+                    //from car to target
                     double target_distance = sqrt(target_x * target_x + target_y * target_y);
+                    //where we start at the begining of this calculation
                     double x_add_on = 0;
                     for (int i = 1; i < 50 - previous_path_x.size(); i++) {
-                        double n = target_distance / (0.02 * reference_velocity / 2.24);
+                        // N * 0.02 * velocity = d
+                        double n = target_distance / (0.02 * reference_velocity / 2.24); //mph to m/s
                         double x_point = x_add_on + target_x / n;
                         double y_point = spline(x_point);
                         x_add_on = x_point;
                         double x_reference = x_point;
                         double y_reference = y_point;
+                        //shift and rotate back to map coordinates
                         x_point = x_reference * cos(reference_yaw) - y_reference * sin(reference_yaw);
                         y_point = x_reference * sin(reference_yaw) + y_reference * cos(reference_yaw);
                         x_point += reference_x;
@@ -322,6 +334,7 @@ int main() {
                         next_x_vals.push_back(x_point);
                         next_y_vals.push_back(y_point);
                     }
+
                     json msgJson;
                     msgJson["next_x"] = next_x_vals;
                     msgJson["next_y"] = next_y_vals;
