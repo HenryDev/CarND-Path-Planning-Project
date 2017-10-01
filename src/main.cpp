@@ -230,7 +230,7 @@ int main() {
                         //if using previous path points, project the s values outward in time
                         their_s += previous_size * 0.02 * their_speed;
 
-                        if ((their_s > car_s && their_s - car_s < 30) || (their_s < car_s && car_s - their_s < 10)) {
+                        if ((their_s > car_s && their_s - car_s < 35) || (their_s < car_s && car_s - their_s < 10)) {
                             if (their_d <= 4) {
                                 left_lane_occupied = true;
                             }
@@ -252,12 +252,19 @@ int main() {
                                     continue;
                                 }
                                 if (lane == 0 || lane == 2) {
-                                    if (!middle_lane_occupied)
+                                    if (!middle_lane_occupied) {
                                         lane = 1;
-                                } else if (!left_lane_occupied) {
-                                    lane = 0;
-                                } else if (!right_lane_occupied) {
-                                    lane = 2;
+                                    } else {
+                                        reference_velocity -= 1;
+                                    }
+                                } else if (lane == 1) {
+                                    if (!left_lane_occupied) {
+                                        lane = 0;
+                                    } else if (!right_lane_occupied) {
+                                        lane = 2;
+                                    } else {
+                                        reference_velocity -= 1;
+                                    }
                                 }
                             }
                         }
