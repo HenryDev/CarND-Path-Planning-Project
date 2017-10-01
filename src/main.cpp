@@ -170,7 +170,7 @@ int main() {
                         //if the car is in my lane
                         if (their_d < 2 + 4 * lane + 2 && their_d > 2 + 4 * lane - 2) {
                             //if they're in front of us and the gap is less than 30m
-                            if (their_s > car_s && their_s - car_s < 30) {
+                            if (their_s > car_s && their_s - car_s < 20) {
                                 too_close = true;
                                 if (left_lane_occupied && middle_lane_occupied && right_lane_occupied) {
                                     reference_velocity -= breaking_magnitude;
