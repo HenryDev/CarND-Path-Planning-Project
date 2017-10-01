@@ -170,7 +170,7 @@ int main() {
         map_waypoints_dy.push_back(d_y);
     }
     int lane = 1; //start in lane 1 the middle lane
-    double reference_velocity = 3.1337; //starting speed in mph
+    double reference_velocity = 0; //starting speed in mph
     h.onMessage([&map_waypoints_x, &map_waypoints_y, &map_waypoints_s, &map_waypoints_dx, &map_waypoints_dy,
                         &lane, &reference_velocity](
             uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
@@ -216,33 +216,58 @@ int main() {
                         car_s = end_path_s;
                     }
                     bool too_close = false;
-                    for (int i = 0; i < sensor_fusion.size(); i++) {
+                    bool middle_lane_occupied = false;
+                    bool left_lane_occupied = false;
+                    bool right_lane_occupied = false;
+                    for (auto &sensor_data : sensor_fusion) {
+                        //the s value of that car
+                        double their_s = sensor_data[5];
                         //car's d position in frenet coordinates
-                        double d = sensor_fusion[i][6];
+                        double their_d = sensor_data[6];
+                        double vx = sensor_data[3];
+                        double vy = sensor_data[4];
+                        double their_speed = sqrt(vx * vx + vy * vy);
+                        //if using previous path points, project the s values outward in time
+                        their_s += previous_size * 0.02 * their_speed;
+
+                        if ((their_s > car_s && their_s - car_s < 30) || (their_s < car_s && car_s - their_s < 10)) {
+                            if (their_d <= 4) {
+                                left_lane_occupied = true;
+                            }
+                            if (their_d > 4 && their_d <= 8) {
+                                middle_lane_occupied = true;
+                            }
+                            if (their_d > 8) {
+                                right_lane_occupied = true;
+                            }
+                        }
+
                         //if the car is in my lane
-                        if (d < 2 + 4 * lane + 2 && d > 2 + 4 * lane - 2) {
-                            double vx = sensor_fusion[i][3];
-                            double vy = sensor_fusion[i][4];
-                            double their_speed = sqrt(vx * vx + vy * vy);
-                            //the s value of that car
-                            double their_s = sensor_fusion[i][5];
-                            //if using previous path points, project the s values outward in time
-                            their_s += previous_size * 0.02 * their_speed;
+                        if (their_d < 2 + 4 * lane + 2 && their_d > 2 + 4 * lane - 2) {
                             //if they're in front of us and the gap is less than 30m
                             if (their_s > car_s && their_s - car_s < 30) {
                                 too_close = true;
-                                if (lane == 1) {
+                                if (left_lane_occupied && middle_lane_occupied && right_lane_occupied) {
+                                    reference_velocity -= 1;
+                                    continue;
+                                }
+                                if (lane == 0 || lane == 2) {
+                                    if (!middle_lane_occupied)
+                                        lane = 1;
+                                } else if (!left_lane_occupied) {
                                     lane = 0;
-                                } else {
-                                    lane = 1;
+                                } else if (!right_lane_occupied) {
+                                    lane = 2;
                                 }
                             }
                         }
                     }
                     if (too_close) {
-                        reference_velocity -= 0.224;
-                    } else if (reference_velocity < 49.5) {
-                        reference_velocity += 0.224;
+                        //slow down gradually
+                        reference_velocity -= 1;
+                    } else if (reference_velocity < 49) {
+                        //speed up gradually
+                        reference_velocity += 1;
                     }
 
                     // waypoints
@@ -276,6 +301,7 @@ int main() {
                         ptsy.push_back(reference_y);
                     }
 
+                    // use spline to smooth lane shifts
                     int d = 2 + 4 * lane;
                     double s = car_s + 30;
                     double s1 = car_s + 60;
