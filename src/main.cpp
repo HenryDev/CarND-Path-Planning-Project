@@ -143,6 +143,7 @@ int main() {
                     bool middle_lane_occupied = false;
                     bool left_lane_occupied = false;
                     bool right_lane_occupied = false;
+                    double breaking_magnitude = 0.5;
                     for (auto &sensor_data : sensor_fusion) {
                         //the s value of that car
                         double their_s = sensor_data[5];
@@ -172,14 +173,14 @@ int main() {
                             if (their_s > car_s && their_s - car_s < 30) {
                                 too_close = true;
                                 if (left_lane_occupied && middle_lane_occupied && right_lane_occupied) {
-                                    reference_velocity -= 1;
+                                    reference_velocity -= breaking_magnitude;
                                     continue;
                                 }
                                 if (lane == 0 || lane == 2) {
                                     if (!middle_lane_occupied) {
                                         lane = 1;
                                     } else {
-                                        reference_velocity -= 1;
+                                        reference_velocity -= breaking_magnitude;
                                     }
                                 } else if (lane == 1) {
                                     if (!left_lane_occupied) {
@@ -187,7 +188,7 @@ int main() {
                                     } else if (!right_lane_occupied) {
                                         lane = 2;
                                     } else {
-                                        reference_velocity -= 1;
+                                        reference_velocity -= breaking_magnitude;
                                     }
                                 }
                             }
@@ -195,7 +196,7 @@ int main() {
                     }
                     if (too_close) {
                         //slow down gradually
-                        reference_velocity -= 1;
+                        reference_velocity -= breaking_magnitude;
                     } else if (reference_velocity < 49) {
                         //speed up gradually
                         reference_velocity += 1;
